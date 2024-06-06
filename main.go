@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/aws/smithy-go/middleware"
@@ -61,7 +62,9 @@ func main() {
 
 func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
-	if key == "" {
+	contentLength, _ := strconv.ParseInt(r.URL.Query().Get("content-length"), 10, 64)
+
+	if key == "" || contentLength <= 0 || contentLength > 1024*1024*1024 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -70,13 +73,13 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	presignClient := s3.NewPresignClient(client)
 
 	// gen presigned url include custom params
-	additionalParams := map[string]string{"no-wait": "5000"} // 等待上传的超时时间
+	additionalParams := map[string]string{"no-wait": "5"} // 等待上传的超时时间 (单位：秒)
 	ctx := context.WithValue(context.TODO(), "bitiful-additional-params", additionalParams)
 	getObjectReq, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	}, func(presignOptions *s3.PresignOptions) {
-		presignOptions.Expires = time.Hour
+		presignOptions.Expires = time.Hour // 有效期1小时
 		presignOptions.ClientOptions = append(presignOptions.ClientOptions, func(options *s3.Options) {
 			options.APIOptions = append(options.APIOptions, RegisterPresignedUrlAddParamsMiddleware)
 		})
@@ -88,8 +91,9 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 
 	// put url
 	putObjectReq, err := presignClient.PresignPutObject(context.Background(), &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
+		Bucket:        aws.String(bucket),
+		Key:           aws.String(key),
+		ContentLength: aws.Int64(contentLength),
 	}, func(presignOptions *s3.PresignOptions) {
 		presignOptions.Expires = time.Hour
 	})
