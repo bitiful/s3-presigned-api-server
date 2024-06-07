@@ -63,6 +63,8 @@ func main() {
 func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	contentLength, _ := strconv.ParseInt(r.URL.Query().Get("content-length"), 10, 64)
+	noWait, _ := strconv.ParseInt(r.URL.Query().Get("no-wait"), 10, 64)
+	maxRetries, _ := strconv.ParseInt(r.URL.Query().Get("max-retries"), 10, 64)
 
 	if key == "" || contentLength <= 0 || contentLength > 1024*1024*1024 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -73,8 +75,21 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	presignClient := s3.NewPresignClient(client)
 
 	// gen presigned url include custom params
-	additionalParams := map[string]string{"no-wait": "5"} // 等待上传的超时时间 (单位：秒)
-	ctx := context.WithValue(context.TODO(), "bitiful-additional-params", additionalParams)
+	additionalParams := map[string]string{} // no-wait等待上传的超时时间 (单位：秒)
+	if noWait > 0 {
+		if noWait > 10 {
+			noWait = 10
+		}
+		additionalParams["x-bitiful-no-wait"] = fmt.Sprintf("%d", noWait)
+	}
+	if maxRetries > 0 {
+		additionalParams["x-bitiful-max-retries"] = fmt.Sprintf("%d", maxRetries)
+	}
+
+	ctx := context.TODO()
+	if len(additionalParams) > 0 {
+		ctx = context.WithValue(ctx, "bitiful-additional-params", additionalParams)
+	}
 	getObjectReq, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
