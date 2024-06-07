@@ -80,7 +80,7 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 		if noWait > 10 {
 			noWait = 10
 		}
-		additionalParams["x-bitiful-no-wait"] = fmt.Sprintf("%d", noWait)
+		additionalParams["no-wait"] = fmt.Sprintf("%d", noWait)
 	}
 	if maxRetries > 0 {
 		additionalParams["x-bitiful-max-retries"] = fmt.Sprintf("%d", maxRetries)
