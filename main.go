@@ -65,6 +65,9 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	contentLength, _ := strconv.ParseInt(r.URL.Query().Get("content-length"), 10, 64)
 	noWait, _ := strconv.ParseInt(r.URL.Query().Get("no-wait"), 10, 64)
 	maxRetries, _ := strconv.ParseInt(r.URL.Query().Get("max-retries"), 10, 64)
+	expireSeconds, _ := strconv.ParseInt(r.URL.Query().Get("expire"), 10, 64)
+	forceDownload, _ := strconv.ParseBool(r.URL.Query().Get("force-download"))
+	limitRate, _ := strconv.ParseInt(r.URL.Query().Get("limit-rate"), 10, 64)
 
 	if key == "" || contentLength <= 0 || contentLength > 1024*1024*1024 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -76,14 +79,28 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 
 	// gen presigned url include custom params
 	additionalParams := map[string]string{} // no-wait等待上传的超时时间 (单位：秒)
+
+	// 开启 simul-transfer 即传即收
 	if noWait > 0 {
 		if noWait > 10 {
 			noWait = 10
 		}
 		additionalParams["no-wait"] = fmt.Sprintf("%d", noWait)
 	}
+
+	// 最大下载次数
 	if maxRetries > 0 {
 		additionalParams["x-bitiful-max-retries"] = fmt.Sprintf("%d", maxRetries)
+	}
+
+	// 单线程限速
+	if limitRate > 0 {
+		additionalParams["x-bitiful-limit-rate"] = fmt.Sprint(limitRate) // 限速 5 MiB/s
+	}
+
+	// 强制下载
+	if forceDownload {
+		additionalParams["response-content-disposition"] = "attachment"
 	}
 
 	ctx := context.TODO()
@@ -94,7 +111,12 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	}, func(presignOptions *s3.PresignOptions) {
-		presignOptions.Expires = time.Hour // 有效期1小时
+		// 有效期
+		if expireSeconds > 0 {
+			presignOptions.Expires = time.Duration(expireSeconds) * time.Second // 有效期1小时
+		} else {
+			presignOptions.Expires = time.Hour // 有效期1小时 默认
+		}
 		presignOptions.ClientOptions = append(presignOptions.ClientOptions, func(options *s3.Options) {
 			options.APIOptions = append(options.APIOptions, RegisterPresignedUrlAddParamsMiddleware)
 		})
