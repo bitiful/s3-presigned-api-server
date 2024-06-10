@@ -64,7 +64,7 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	contentLength, _ := strconv.ParseInt(r.URL.Query().Get("content-length"), 10, 64)
 	noWait, _ := strconv.ParseInt(r.URL.Query().Get("no-wait"), 10, 64)
-	maxRetries, _ := strconv.ParseInt(r.URL.Query().Get("max-retries"), 10, 64)
+	maxRequests, _ := strconv.ParseInt(r.URL.Query().Get("max-requests"), 10, 64)
 	expireSeconds, _ := strconv.ParseInt(r.URL.Query().Get("expire"), 10, 64)
 	forceDownload, _ := strconv.ParseBool(r.URL.Query().Get("force-download"))
 	limitRate, _ := strconv.ParseInt(r.URL.Query().Get("limit-rate"), 10, 64)
@@ -89,8 +89,8 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 最大下载次数
-	if maxRetries > 0 {
-		additionalParams["x-bitiful-max-retries"] = fmt.Sprintf("%d", maxRetries)
+	if maxRequests > 0 {
+		additionalParams["x-bitiful-max-requests"] = fmt.Sprintf("%d", maxRequests)
 	}
 
 	// 单线程限速
