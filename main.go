@@ -20,20 +20,23 @@ import (
 
 const s3Endpoint = "https://s3.bitiful.net"
 
-var bucket = ""
+var bucket = "fanfan"
 
-var ak = ""
-var sk = ""
+var ak = "NrPd6Jkm0nnw6t6LrRPQ0XZp"
+var sk = "ynHQws8FipRPkwEdq0jV1noBJSDP83O"
+
+// var ak = "7ZAaxG2z6PHTTVGbmJrhp1ci"
+// var sk = "mKgrdvf7wvoNWXNwVVW8Mpapi64Ci1m"
 
 func getS3Client(key, secret string) *s3.Client {
 	customProvider := credentials.NewStaticCredentialsProvider(key, secret, "")
-	cfg, err := config.LoadDefaultConfig(context.TODO(), 
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(customProvider),
 		config.WithRegion("cn-east-1"))
 	if err != nil {
 		return nil
 	}
-	
+
 	// 创建S3客户端并配置自定义端点
 	s3client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(s3Endpoint)
@@ -42,9 +45,9 @@ func getS3Client(key, secret string) *s3.Client {
 }
 
 func main() {
-	bucket = os.Getenv("BUCKET")
-	ak = os.Getenv("AK")
-	sk = os.Getenv("SK")
+	// bucket = os.Getenv("BUCKET")
+	// ak = os.Getenv("AK")
+	// sk = os.Getenv("SK")
 
 	if bucket == "" || ak == "" || sk == "" {
 		log.Fatal("bucket, ak, sk should not be empty")
@@ -60,16 +63,26 @@ func main() {
 func presignedUrl(w http.ResponseWriter, r *http.Request) {
 	// http://127.0.0.1:1998/presigned-url?key=tmp/test&content-length=231703
 	key := r.URL.Query().Get("key")
-	contentLength, _ := strconv.ParseInt(r.URL.Query().Get("content-length"), 10, 64)
+	contentLengthStr := r.URL.Query().Get("content-length")
 	noWait, _ := strconv.ParseInt(r.URL.Query().Get("no-wait"), 10, 64)
 	maxRequests, _ := strconv.ParseInt(r.URL.Query().Get("max-requests"), 10, 64)
 	expireSeconds, _ := strconv.ParseInt(r.URL.Query().Get("expire"), 10, 64)
 	forceDownload, _ := strconv.ParseBool(r.URL.Query().Get("force-download"))
 	limitRate, _ := strconv.ParseInt(r.URL.Query().Get("limit-rate"), 10, 64)
 
-	if key == "" || contentLength <= 0 || contentLength > 1024*1024*1024 {
+	if key == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+
+	var contentLength int64
+	if contentLengthStr != "" {
+		contentLength, _ = strconv.ParseInt(contentLengthStr, 10, 64)
+		// 如果指定了content-length，则验证其有效性
+		if contentLength <= 0 || contentLength > 1024*1024*1024 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	client := getS3Client(ak, sk)
@@ -124,13 +137,21 @@ func presignedUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// put url
-	putObjectReq, err := presignClient.PresignPutObject(context.Background(), &s3.PutObjectInput{
-		Bucket:        aws.String(bucket),
-		Key:           aws.String(key),
-		ContentLength: aws.Int64(contentLength),
-	}, func(presignOptions *s3.PresignOptions) {
-		presignOptions.Expires = time.Hour
+	putObjectInput := &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}
+	// 只有当指定了contentLength时才设置ContentLength字段
+	if contentLengthStr != "" {
+		putObjectInput.ContentLength = aws.Int64(contentLength)
+	}
+
+	putObjectReq, err := presignClient.PresignPutObject(context.Background(), putObjectInput, func(presignOptions *s3.PresignOptions) {
+		if expireSeconds > 0 {
+			presignOptions.Expires = time.Duration(expireSeconds) * time.Second // 有效期1小时
+		} else {
+			presignOptions.Expires = time.Hour // 有效期1小时 默认
+		}
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
