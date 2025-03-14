@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -22,25 +21,23 @@ import (
 const s3Endpoint = "https://s3.bitiful.net"
 
 var bucket = ""
+
 var ak = ""
 var sk = ""
 
 func getS3Client(key, secret string) *s3.Client {
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		if service == "S3" {
-			return aws.Endpoint{
-				URL: s3Endpoint,
-			}, nil
-		}
-		return aws.Endpoint{}, fmt.Errorf("unknown service requested")
-	})
 	customProvider := credentials.NewStaticCredentialsProvider(key, secret, "")
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithCredentialsProvider(customProvider), config.WithEndpointResolverWithOptions(customResolver))
+	cfg, err := config.LoadDefaultConfig(context.TODO(), 
+		config.WithCredentialsProvider(customProvider),
+		config.WithRegion("cn-east-1"))
 	if err != nil {
 		return nil
 	}
-	cfg.Region = "cn-east-1"
-	s3client := s3.NewFromConfig(cfg)
+	
+	// 创建S3客户端并配置自定义端点
+	s3client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(s3Endpoint)
+	})
 	return s3client
 }
 
@@ -61,6 +58,7 @@ func main() {
 }
 
 func presignedUrl(w http.ResponseWriter, r *http.Request) {
+	// http://127.0.0.1:1998/presigned-url?key=tmp/test&content-length=231703
 	key := r.URL.Query().Get("key")
 	contentLength, _ := strconv.ParseInt(r.URL.Query().Get("content-length"), 10, 64)
 	noWait, _ := strconv.ParseInt(r.URL.Query().Get("no-wait"), 10, 64)
