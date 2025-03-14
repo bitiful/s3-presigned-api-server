@@ -20,13 +20,10 @@ import (
 
 const s3Endpoint = "https://s3.bitiful.net"
 
-var bucket = "fanfan"
+var bucket = ""
 
-var ak = "NrPd6Jkm0nnw6t6LrRPQ0XZp"
-var sk = "ynHQws8FipRPkwEdq0jV1noBJSDP83O"
-
-// var ak = "7ZAaxG2z6PHTTVGbmJrhp1ci"
-// var sk = "mKgrdvf7wvoNWXNwVVW8Mpapi64Ci1m"
+var ak = ""
+var sk = ""
 
 func getS3Client(key, secret string) *s3.Client {
 	customProvider := credentials.NewStaticCredentialsProvider(key, secret, "")
@@ -45,9 +42,9 @@ func getS3Client(key, secret string) *s3.Client {
 }
 
 func main() {
-	// bucket = os.Getenv("BUCKET")
-	// ak = os.Getenv("AK")
-	// sk = os.Getenv("SK")
+	bucket = os.Getenv("BUCKET")
+	ak = os.Getenv("AK")
+	sk = os.Getenv("SK")
 
 	if bucket == "" || ak == "" || sk == "" {
 		log.Fatal("bucket, ak, sk should not be empty")
